@@ -30,6 +30,7 @@
             <tr>
                 <th>Address</th>
                 <td>Balance</td>
+                <td>Staked</td>
             </tr>
         </thead>
         <tbody></tbody>
@@ -41,7 +42,8 @@
             chainID: 'columbus-5',
         });
         const params = new URLSearchParams(window.location.search);
-        const tokenAddress = params.get("address");
+        const tokenAddress = params.get("token");
+        const stakingAddress = params.get("staking");
         const allHolders = [];
         const count = document.getElementById("holders");
         const [tBody] = document.getElementById("table").tBodies;
@@ -51,10 +53,10 @@
         link.setAttribute("target", "_blank");
         const download = document.getElementById("download");
         download.addEventListener("click", ({ target }) => {
-            target.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent([{ address: "address", balance: "balance" }, ...allHolders].map(holder => Object.values(holder).join(',')).join('\n')));
+            target.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent([{ address: "address", balance: "balance", bond_amount: "staked" }, ...allHolders].map(holder => Object.values(holder).join(',')).join('\n')));
             target.setAttribute("download", "holders.csv");
         });
-        async function insert(address, balance) {
+        async function insert(address, balance, bond_amount) {
             const row = tBody.insertRow(-1);
             const addressCell = row.insertCell();
             const a = link.cloneNode();
@@ -63,13 +65,16 @@
             addressCell.appendChild(a);
             const balanceCell = row.insertCell();
             balanceCell.innerText = balance;
-            allHolders.push({ address, balance });
+            const stakingCell = row.insertCell();
+            stakingCell.innerText = bond_amount;
+            allHolders.push({ address, balance, bond_amount });
             count.innerText = `Count: ${allHolders.length}`;
         }
         async function addAccounts(accounts) {
             for (const address of accounts) {
                 const { balance } = await terra.wasm.contractQuery(tokenAddress, { balance: { address } });
-                insert(address, balance);
+                const { bond_amount } = await terra.wasm.contractQuery(stakingAddress, { staker_info: { staker: address }}); 
+                insert(address, balance, bond_amount);
                 await sleep(10);
             }
         }
