@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terra CW20 Token Holders</title>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+        table, tr, td, th {
+            border-collapse: collapse;
+            border: 1px solid black;
+        }
+        #download {
+            color: blue;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="title">Loading token holders...</h1>
+    <p id="holders">Count</p>
+    <a id="download">Download CSV</a>
+    <ol id="accounts"></ol>
+    <table id="table">
+        <thead>
+            <tr>
+                <th>Address</th>
+                <td>Balance</td>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <script crossorigin src="https://unpkg.com/@terra-money/terra.js/dist/bundle.js"></script>
+    <script>
+        const terra = new Terra.LCDClient({
+            URL: 'https://lcd.terra.dev',
+            chainID: 'columbus-5',
+        });
+        const params = new URLSearchParams(window.location.search);
+        const tokenAddress = params.get("address");
+        const allHolders = [];
+        const count = document.getElementById("holders");
+        const [tBody] = document.getElementById("table").tBodies;
+        const LIMIT = 30;
+        const sleep = delay => new Promise(resolve => setInterval(resolve, delay));
+        const link = document.createElement("a");
+        link.setAttribute("target", "_blank");
+        const download = document.getElementById("download");
+        download.addEventListener("click", ({ target }) => {
+            target.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent([{ address: "address", balance: "balance" }, ...allHolders].map(holder => Object.values(holder).join(',')).join('\n')));
+            target.setAttribute("download", "holders.csv");
+        });
+        async function insert(address, balance) {
+            const row = tBody.insertRow(-1);
+            const addressCell = row.insertCell();
+            const a = link.cloneNode();
+            a.setAttribute("href", `https://finder.terra.money/mainnet/address/${address}`);
+            a.innerText = address;
+            addressCell.appendChild(a);
+            const balanceCell = row.insertCell();
+            balanceCell.innerText = balance;
+            allHolders.push({ address, balance });
+            count.innerText = `Count: ${allHolders.length}`;
+        }
+        async function addAccounts(accounts) {
+            for (const address of accounts) {
+                const { balance } = await terra.wasm.contractQuery(tokenAddress, { balance: { address } });
+                insert(address, balance);
+                await sleep(10);
+            }
+        }
+        async function main() {
+            let result = await terra.wasm.contractQuery(tokenAddress, { all_accounts: { limit: LIMIT } });
+            await addAccounts(result.accounts);
+            while (result.accounts.length === LIMIT) {
+                await sleep(10);
+                result = await terra.wasm.contractQuery(tokenAddress, { all_accounts: { limit: LIMIT, start_after: result.accounts[result.accounts.length - 1] } });
+                await addAccounts(result.accounts);
+            }
+            document.getElementById("title").innerText = `${tokenAddress} Token holders`;
+        }
+        main().catch(console.error);
+    </script>
+</body>
+</html>
